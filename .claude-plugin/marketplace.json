@@ -1,0 +1,14 @@
+{
+  "name": "dromsak-skills",
+  "owner": {
+    "name": "dromsak",
+    "url": "https://github.com/dromsak"
+  },
+  "plugins": [
+    {
+      "name": "dromsak-skills",
+      "source": "./",
+      "description": "Personal toolbox of Claude Code skills: the AFK pipeline (afk-issues → afk-army → uat), architect, grill-me, and dromsak-guidelines."
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "name": "dromsak-skills",
+  "description": "Personal toolbox of Claude Code skills. Headline workflow is the AFK pipeline (afk-issues → afk-army → uat) for backlog-driven parallel agent development; ships alongside architect, grill-me, and dromsak-guidelines.",
+  "author": {
+    "name": "dromsak",
+    "url": "https://github.com/dromsak"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/dromsak/skills",
+  "skills": [
+    "./skills/grill-me",
+    "./skills/afk-issues",
+    "./skills/afk-army",
+    "./skills/uat",
+    "./skills/architect",
+    "./skills/dromsak-guidelines"
+  ]
+}
