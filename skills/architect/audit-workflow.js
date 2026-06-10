@@ -154,7 +154,7 @@ function reviewPrompt(scope, chunk, schemaScope) {
     ``,
     `Rules:`,
     `- Each finding cites file:line, quotes the offending code in "problem", and sets exactly one "lens" from the enum.`,
-    `- For reinvention (①) and lang-idiom (⑭) you MUST name the concrete replacement library/std API and estimate loc_delta.`,
+    `- For reinvention (①) you MUST name the concrete replacement library/std API and estimate loc_delta. For lang-idiom (⑭), name a replacement only where a library/std API genuinely applies — otherwise leave "replacement" empty; never invent one to satisfy this rule.`,
     `- Skim CONTEXT.md/README, CLAUDE.md, the .claude/architect.md profile, and relevant docs/adr/ first to understand intent — but a deliberate decision can still be a finding (lens suspect-decision).`,
     `- Before reporting dead-code (④), confirm the symbol is not reached via a macro, reflection, DI, trait impl, re-export, or template/route — use grep/Explore to check.`,
     `- Report each distinct problem ONCE. Do not file the same issue under several lenses; pick the best-fitting lens.`,
@@ -230,9 +230,11 @@ const all = reviewed.length
 log(`Review+verify done across ${chunks.length} chunk(s): ${all} findings judged.`)
 
 // ---- Light cross-chunk dedup (chunks are disjoint files, so this is rarely needed) ----
+// Confirmed-first order so a refuted/unverified duplicate can never shadow a confirmed twin.
+const STATUS_RANK = { confirmed: 0, unverified: 1, refuted: 2 }
 const seen = new Set()
 const deduped = []
-for (const f of reviewed) {
+for (const f of [...reviewed].sort((a, b) => STATUS_RANK[a.status] - STATUS_RANK[b.status])) {
   const key = `${(f.file || '').split(':')[0]}|${f.lens}|${(f.title || '').toLowerCase().slice(0, 50)}`
   if (!seen.has(key)) {
     seen.add(key)
@@ -242,9 +244,9 @@ for (const f of reviewed) {
 
 const confirmed = deduped.filter((f) => f.status === 'confirmed')
 const refuted = deduped.filter((f) => f.status === 'refuted')
-const unverified = deduped.filter((f) => f.status === 'unverified').length
+const unverified = deduped.filter((f) => f.status === 'unverified')
 const agentsSpawned = chunks.length + verifiersRun
-log(`Confirmed ${confirmed.length}/${deduped.length} (refuted ${refuted.length}, unverified ${unverified}). Spawned ${agentsSpawned} agents.`)
+log(`Confirmed ${confirmed.length}/${deduped.length} (refuted ${refuted.length}, unverified ${unverified.length}). Spawned ${agentsSpawned} agents.`)
 
 return {
   scope: A.scope,
@@ -257,5 +259,6 @@ return {
   deduped_findings: deduped.length,
   confirmed_findings: confirmed.length,
   confirmed,
-  refuted, // each carries `refutation` (the skeptic's reason) — surface these in the report's "Refuted" section
+  refuted, // each carries `refutation` (the skeptic's reason) — surface these in the report's "Refuted / skipped" section
+  unverified, // skeptic returned no verdict — not actioned, but list them in "Refuted / skipped" (no silent drops)
 }
