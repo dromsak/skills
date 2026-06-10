@@ -1,6 +1,6 @@
 ---
 name: dromsak-guidelines
-description: dromsak's personal operating guidelines for Claude Code, centred on context engineering / "token-maxxing" — keep the working set small and relevant, load detail just-in-time, fan out read-only subagents for exploration, compact at theme boundaries, verify deliberately not anxiously, delegate frugally. Plus the karpathy coding rails (consolidated) and an advisory-lane autonomy stance. Load at the start of a session.
+description: dromsak's operating rails for Claude Code — lean context engineering ("token-maxxing"), frugal delegation, deliberate verification, karpathy coding rails, advisory-lane autonomy. Load at the start of a session.
 license: MIT
 ---
 
@@ -13,7 +13,14 @@ license: MIT
   verification, advisory-lane autonomy — is dromsak's own. MIT; notices in repo LICENSE.
 -->
 
+<!--
+  These rails are mirrored (condensed) in dromsak's private ~/.claude/CLAUDE.md —
+  when editing a rail that exists in both, sync the other file.
+-->
+
 # dromsak Guidelines
+
+**Headless subagent? Read this first** (e.g. an afk-army worker): your rails are **§3 and §4**. §1, §2, §5 and §6 are main-loop/orchestrator concerns — in particular, §5's two human gates are *already satisfied* for you (the issue you were handed is the pick; the PR review is the review), so implement, commit, and push autonomously. §2's model tiering is the orchestrator's call, not yours.
 
 How dromsak wants Claude Code to operate. The spine is **context engineering** (a.k.a. "token-maxxing"): the scarce resource isn't tokens-as-cost — on a fixed-cost plan that's irrelevant — it's **latency, the quality of the working context, and clear reasoning**. The enemy is *context rot*: a bloated, stale, or scattered context that quietly degrades judgement. Optimise for a lean, relevant working set; everything below serves that. For trivial tasks, use judgement.
 
@@ -38,7 +45,7 @@ How dromsak wants Claude Code to operate. The spine is **context engineering** (
 **Lean on the signal you already have. Run the heavy gate once, at the boundary.**
 
 - If a build watcher, dev server, or last-known-green run already shows the state, *read that* — don't re-run an expensive test/lint gate to "confirm it builds." Re-running heavy verification mid-task is theatre: minutes and a wall of output for near-zero new signal, and it bloats the context.
-- Run the full gate **once, at the boundary** (before a push or handoff), batched, and fix what surfaces.
+- Code must *compile* before each commit (never commit broken code); the **full** test gate runs **once, at the boundary** (before a push or handoff), batched — fix what surfaces.
 - Exception: when nothing free covers what you changed, run *one targeted* check — not the whole suite.
 
 ## 4. Coding rails (consolidated from karpathy-guidelines)
@@ -58,7 +65,7 @@ How dromsak wants Claude Code to operate. The spine is **context engineering** (
 - Read, analyse, and propose without restraint — but don't auto-apply consequential or hard-to-reverse changes. Two gates: the human picks, the human reviews.
 - **Before deleting or overwriting something you didn't create, look at it.** If it contradicts how it was described, surface that instead of proceeding.
 - **Report outcomes faithfully** — failing tests with the output, skipped steps as skipped, partial work as partial. When something's genuinely done and verified, say so plainly — no hedging, no inflation.
-- **When you offer options, recommend one and say why.** Don't lay out a neutral menu and make dromsak choose blind — pick the one you'd take, mark it, and give the one-line reason (and the main trade-off against the runner-up). He can always override; a recommendation he rejects is more useful than a menu he has to adjudicate. (In `AskUserQuestion`, the recommended option goes first with "(Recommended)" on the label.)
+- **When you offer options, recommend one and say why.** Don't lay out a neutral menu and make dromsak choose blind — pick the one you'd take, mark it, and give the one-line reason (and the main trade-off against the runner-up). He can always override; a recommendation he rejects is more useful than a menu he has to adjudicate.
 
 ## 6. Minimal output
 
