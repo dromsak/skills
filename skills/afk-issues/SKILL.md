@@ -1,6 +1,6 @@
 ---
 name: afk-issues
-description: Carve findings from the current conversation into well-shaped GitHub issues. Generates title + acceptance-criteria body, classifies complexity (needs-sonnet vs needs-opus), wires same-surface `## Blocked by` markers automatically, and tags `ready-for-agent`. Companion to `/afk-army`, which then drains the resulting queue.
+description: Carve findings from the current conversation into well-shaped GitHub issues. Batches by module by default — one issue per module carrying ALL that module's findings (worker context-loading dominates cost, so N findings per file-read beats N file-reads). Generates title + acceptance-criteria body, classifies complexity (needs-sonnet vs needs-opus), wires same-surface `## Blocked by` markers automatically, and tags `ready-for-agent`. Companion to `/afk-army`, which then drains the resulting queue.
 user-invocable: true
 ---
 
@@ -8,7 +8,7 @@ user-invocable: true
 
 `/afk-issues [opus|sonnet] [labels...]` — carve the findings the user just walked through into GitHub issues.
 
-The natural input is the **current conversation**: the user has been doing UAT, code review, or grilling, has surfaced 3–10 bugs/polish items, and now wants them filed at agent-shaped granularity. The skill reads the recent conversation context, identifies each distinct finding, and emits one issue per finding.
+The natural input is the **current conversation**: the user has been doing UAT, code review, grilling, or an `/architect` audit, has surfaced findings, and now wants them filed at agent-shaped granularity. The skill reads the recent conversation context, identifies each distinct finding, **groups findings by module**, and emits one issue per module group (see Batching below) — one issue per finding only when findings don't share a module.
 
 ## Target repo
 
@@ -53,6 +53,26 @@ done
 
 If any are missing, offer to create them with `gh label create <name>` and short descriptions, then continue.
 
+## Batching — one issue per module (DEFAULT)
+
+**This is the token- and wall-clock lever; everything else is formatting.** An `/afk-army` worker's cost is dominated by context loading — CLAUDE.md, conventions, reading the module — not by the diff it writes. One worker that reads `patch_handler.rs` once and fixes its five findings costs barely more than a worker that fixes one. So:
+
+- **Group findings by primary module/surface** (the file or directory the fix lives in). One issue per group, every finding in the group a line in the AC checklist. A finding that shares no module with any other gets a singleton issue, as before.
+- **Cross-module extractions get their own issue, filed first.** A shared-helper extraction (consolidate N copies into one util) is its own wave-1 issue; the module batches that consume the helper get `## Blocked by` pointing at it. Never fold an extraction into one of its consumer batches.
+- **Bonus:** module batching means sibling issues rarely touch the same files — the same-surface serialization pass below mostly no-ops, and `/afk-army`'s merge-train sees near-zero conflicts.
+
+### Bulk source mode — point at a committed report
+
+When the findings come from a bulk source with a written artifact (an `/architect` audit report, a long review doc), **do not duplicate finding prose into issue bodies**:
+
+1. Require the report **committed and pushed to the default branch first** — workers branch off main and must be able to `Read` it in their worktree. If it isn't committed, stop and commit it (or have the user do so) before filing.
+2. Each issue body lists its findings as: `**<finding-id>** — <one-line summary> (report § / file:line)`, plus a References entry naming the report path. The one-liners keep the issue skimmable on GitHub; the report carries the full problem/fix detail.
+3. The AC checklist gets one item per finding (the worker re-reads the report section for the detail).
+
+### Sizing a batch
+
+A module batch is still **one agent sitting**. The "too big" markers below apply to *scope breadth*, not AC count — a batch of 12 mechanical riders in one module is fine; two unrelated surfaces in one issue is not. Split a batch at natural submodule seams when it exceeds ~15 findings, mixes opus-grade findings with mechanical riders such that the whole issue would classify opus for mostly-sonnet work (split by grade), or couples to another module's in-flight extraction (split + `## Blocked by`).
+
 ## Building each issue
 
 Every issue body MUST follow this template — `/afk-army` workers parse it for AC and file references:
@@ -95,7 +115,7 @@ Use `bug` for breakage, `polish` for affordance/copy, `feat` for new capability,
 
 Aim for an issue a single agent worker can complete in a 30–90 minute run (verify gate included). Markers that the issue is TOO BIG:
 
-- The "Acceptance criteria" list exceeds 6 items.
+- The "Acceptance criteria" list exceeds 6 items — **unless it's a module batch of mechanical riders** (see Batching), where one AC line per finding is the intended shape.
 - Two or more independent surfaces are named in "Approach".
 - The change requires both a schema migration AND a backfill AND template work.
 
@@ -171,7 +191,7 @@ done
 #942 [sonnet] notifications: weekly digest not sent
 
 Filed 8 issues. 6 ready, 2 same-surface-deferred.
-Run `/afk-army sonnet 3` to drain, or `/afk-army hybrid 3` if any are needs-opus.
+Run `/afk-army` to drain — no args: worker models come from the per-issue labels, and the Workflow runtime owns parallelism.
 ```
 
 ## What NOT to do

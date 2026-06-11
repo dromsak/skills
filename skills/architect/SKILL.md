@@ -73,7 +73,7 @@ Sort confirmed findings by **impact ÷ effort**, with LLM-dev-velocity gains wei
 
 ## 6. Hand off the picks — two gates, no autonomy
 
-- **Code findings** → invoke `/afk-issues` to file each pick as a `ready-for-agent` issue (AC checklist, complexity label, same-surface `## Blocked by` wiring), then tell the user to run `/afk-army` to drain them. Every fix lands as a PR they squash-merge. Reuse that machinery — never edit code directly from here.
+- **Code findings** → first make sure the audit report is **committed and pushed to the default branch** (it's the canonical finding store the issues point into — `/afk-army` workers read it from worktrees branched off main), then invoke `/afk-issues`, which **batches by module by default**: one issue per module carrying all its findings as finding-ID pointers into the report, shared-helper extractions filed first with `## Blocked by` wiring on their consumers (full doctrine in afk-issues' Batching section). Hand the picks over pre-clustered by module — the report's themes are presentation; the module is the work unit. Then tell the user to run `/afk-army` to drain. Every fix lands as a PR they squash-merge. Reuse that machinery — never edit code directly from here.
 - **Suspect-decision findings (⑨)** are **not** afk-army work — revisiting a decision is a doc edit ± a follow-on refactor. Keep them in the "Decisions to revisit" section; the user decides which deserve a doc/ADR rewrite.
 - **Doc/skill/config findings** (e.g. auditing a `*.md` skill file or `CLAUDE.md`) are surgical edits — make them directly here, one finding at a time, after the user picks. Same two gates: user picks, user reviews the diff.
 

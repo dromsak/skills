@@ -10,6 +10,8 @@ user-invocable: true
 
 The Workflow runtime owns worktree lifecycle, concurrency, background execution, and structured results — so this skill is thin orchestration, not the hand-rolled choreography it used to be (no heartbeats, no CWD-drift policing, no manual top-up loop, no golden-cache hacks).
 
+Issues filed by `/afk-issues` are **module-batched by default** — one issue per module carrying several findings, often as finding-ID pointers into a committed report (e.g. `docs/audits/…`). Nothing changes here: the worker reads the referenced report inside its worktree (it branches off main, so the report must already be on the default branch — `/afk-issues` enforces that at filing time), and the batch's AC checklist is the work list.
+
 **No self-imposed concurrency cap.** Each wave passes *every* currently-unblocked issue to the workflow at once; the runtime sets the real ceiling (it paces to its own `min(16, cores−2)` and queues the rest). Never batch, sample, or cap the wave yourself — that's interference. The only thing that bounds a wave's width is the dependency graph (how many issues are unblocked right now), never a number you pick.
 
 ## ⚠️ One load-bearing assumption (read once)
