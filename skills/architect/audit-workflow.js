@@ -14,7 +14,10 @@ export const meta = {
 //   projectContext?: string,  // one-paragraph framing + constraints, or ""
 //   driftGuide?: string,      // repo-specific layering invariants for lens ⑧, or "" = generic
 //   idiomGuide?: string,      // language-idiom checklist for lens ⑭, or "" = language default
+//   uiGuide?: string,         // repo UI conventions (design system, token source) for lens ⑯, or "" = generic
 //   schemaScope?: bool,       // true ⇒ add the schema lens ⑮ (persistence-layer scope)
+//   uiScope?: bool,           // true ⇒ force the frontend lens ⑯ on every chunk; otherwise it
+//                             //   auto-enables per chunk when files have UI extensions
 // }
 // Review + verify agents run on Sonnet; the parent (Opus) loop ranks/presents the result.
 //
@@ -25,6 +28,12 @@ const LANG = (A.lang || '').trim()
 const PROJECT_CONTEXT = (A.projectContext || '').trim()
 const DRIFT_GUIDE = (A.driftGuide || '').trim()
 const IDIOM_GUIDE = (A.idiomGuide || '').trim()
+const UI_GUIDE = (A.uiGuide || '').trim()
+
+// Frontend lens gate: forced via uiScope, else auto-detected per chunk from file extensions.
+// Frontend-in-plain-.js repos won't match — that is what the explicit uiScope flag is for.
+const UI_FILE_RE = /\.(tsx|jsx|vue|svelte|astro|html?|css|scss|sass|less|styl)$/i
+const chunkHasUI = (chunk) => A.uiScope === true || (chunk.files || []).some((f) => UI_FILE_RE.test(f))
 
 // HARD CEILING — structural, not advisory. This is a rapid-prototyping triage tool, not a
 // perfectionist gate: an early run spun up ~400 agents on one surface. Cost is ~2 agents/chunk,
@@ -59,6 +68,7 @@ const LENSES = [
   'security',         // ⑬
   'lang-idiom',       // ⑭
   'schema',           // ⑮ persistence-only
+  'frontend',         // ⑯ UI chunks only (uiScope / auto-detected)
 ]
 
 // Language-neutral prose. Language-specific colour for ⑧ and ⑭ is injected from args
@@ -86,6 +96,12 @@ const LENS_GUIDE =
 
 const SCHEMA_LENS_GUIDE =
   '⑮ schema — data-model/schema shape (over/under-normalization, redundant/derivable columns, collapsible migrations). Higher-uncertainty: only report what you are confident of, with the exact table/column.\n'
+
+const DEFAULT_UI =
+  'bespoke one-off components where an existing shared component or the component library already provides the primitive (a hand-styled <button> next to an existing <Button>); hardcoded colors/spacing/font sizes where theme tokens, CSS variables, or the Tailwind scale exist; the same UI pattern (modal, form, table, toast) implemented divergent ways across pages; copy-pasted page markup that should be one shared component; hand-rolled form/fetch/format logic a dependency already in the package manifest covers'
+
+const FRONTEND_LENS_GUIDE =
+  `⑯ frontend — UI built outside the project primitives (the signature smell of pages grown one prompt at a time, each in isolation): ${UI_GUIDE || DEFAULT_UI}. FIRST discover what the repo already has (shared components dir, theme/token files, UI deps in the manifest), then name the existing primitive that should have been used — or, where none exists and the pattern repeats, the proposed fix is the shared component/token to extract.\n`
 
 const FINDINGS_SCHEMA = {
   type: 'object',
@@ -141,13 +157,13 @@ function langLine() {
   return LANG ? `You are a senior ${LANG} architect.` : `You are a senior software architect; infer the language(s) from the files.`
 }
 
-function reviewPrompt(scope, chunk, schemaScope) {
+function reviewPrompt(scope, chunk, schemaScope, uiScope) {
   return [
     `${langLine()} You are auditing the "${scope}" surface.`,
     PROJECT_CONTEXT ? `Project context — ${PROJECT_CONTEXT}` : ``,
     `Read each file below IN FULL exactly once, then report every finding across ALL of these lenses:`,
     ``,
-    LENS_GUIDE + (schemaScope ? SCHEMA_LENS_GUIDE : ''),
+    LENS_GUIDE + (schemaScope ? SCHEMA_LENS_GUIDE : '') + (uiScope ? FRONTEND_LENS_GUIDE : ''),
     ``,
     `Files to review:`,
     ...chunk.files.map((f) => `  - ${f}`),
@@ -155,6 +171,7 @@ function reviewPrompt(scope, chunk, schemaScope) {
     `Rules:`,
     `- Each finding cites file:line, quotes the offending code in "problem", and sets exactly one "lens" from the enum.`,
     `- For reinvention (①) you MUST name the concrete replacement library/std API and estimate loc_delta. For lang-idiom (⑭), name a replacement only where a library/std API genuinely applies — otherwise leave "replacement" empty; never invent one to satisfy this rule.`,
+    uiScope ? `- For frontend (⑯) "replacement" MUST name the existing in-repo component/token/dependency that should have been used — or, where the repo has no primitive and the pattern repeats across files, the new shared component/token to extract. A single one-off with no existing primitive and no repetition is NOT a ⑯ finding.` : ``,
     `- Skim CONTEXT.md/README, CLAUDE.md, the .claude/architect.md profile, and relevant docs/adr/ first to understand intent — but a deliberate decision can still be a finding (lens suspect-decision).`,
     `- Before reporting dead-code (④), confirm the symbol is not reached via a macro, reflection, DI, trait impl, re-export, or template/route — use grep/Explore to check.`,
     `- Report each distinct problem ONCE. Do not file the same issue under several lenses; pick the best-fitting lens.`,
@@ -163,7 +180,7 @@ function reviewPrompt(scope, chunk, schemaScope) {
   ].filter(Boolean).join('\n')
 }
 
-function batchVerifyPrompt(scope, chunk, findings, schemaScope) {
+function batchVerifyPrompt(scope, chunk, findings, schemaScope, uiScope) {
   const list = findings
     .map((f, i) =>
       [
@@ -181,6 +198,7 @@ function batchVerifyPrompt(scope, chunk, findings, schemaScope) {
     `These findings all concern the "${scope}" surface, in/around these files:`,
     ...chunk.files.map((f) => `  - ${f}`),
     schemaScope ? `Several findings may be database schema-shape (lens "schema") — be EXTRA skeptical of those; schema judgments are easy to get wrong.` : ``,
+    uiScope ? `Some findings may be frontend (lens "frontend") — verify the named component/token/library actually exists in THIS repo (check the shared components dir, theme/token files, package manifest) and genuinely covers the case; for proposed extractions, verify the duplicated markup/pattern is real and not divergent-on-purpose.` : ``,
     ``,
     `For EACH finding, read the relevant file(s) yourself and check: does the quoted code actually exist as claimed? If a replacement library/API is named, does it exist and genuinely do what is claimed (check the real library, not your memory)? Is "dead" code actually reached via a macro/reflection/DI/trait/re-export/route? Is a "duplicate" actually divergent-on-purpose? Would the fix break the build or tests?`,
     `Refute (refuted:true) if the finding is wrong, overstated, unverifiable, or names a library/API that does not do what is claimed. Confirm (refuted:false) ONLY if you independently reproduced the problem.`,
@@ -197,7 +215,7 @@ const perChunk = await pipeline(
   chunks,
   // Stage 1: single reviewer, reads files once, applies every lens.
   (chunk) =>
-    agent(reviewPrompt(A.scope, chunk, A.schemaScope), {
+    agent(reviewPrompt(A.scope, chunk, A.schemaScope, chunkHasUI(chunk)), {
       label: `review:${chunk.label}`,
       phase: 'Review',
       model: 'sonnet',
@@ -207,7 +225,7 @@ const perChunk = await pipeline(
   async ({ chunk, findings }) => {
     if (findings.length === 0) return []
     verifiersRun++
-    const res = await agent(batchVerifyPrompt(A.scope, chunk, findings, A.schemaScope), {
+    const res = await agent(batchVerifyPrompt(A.scope, chunk, findings, A.schemaScope, chunkHasUI(chunk)), {
       label: `verify:${chunk.label}`,
       phase: 'Verify',
       model: 'sonnet',

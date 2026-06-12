@@ -32,6 +32,12 @@ microservices / horizontal-scaling / service-mesh, they do not apply.
 - floating-point Number for money (use integer cents / a decimal library)
 - swallowed promise rejections; unhandled async errors on fallible paths
 - stringly-typed errors / `any` leaking past a module boundary where a union belongs
+
+## UI conventions
+<!-- lens ⑯ — what "the project's primitives" means in THIS repo -->
+- component library: shadcn/ui — primitives live in src/components/ui/
+- styling: Tailwind only; design tokens in tailwind.config.ts — no raw hex/px, no inline styles
+- forms via react-hook-form + zod; data fetching via TanStack Query — no hand-rolled fetch state
 ```
 
-When this file is absent, lens ⑧ falls back to generic layering judgment and lens ⑭ to the detected language's default idiom checklist.
+When this file is absent, lens ⑧ falls back to generic layering judgment, lens ⑭ to the detected language's default idiom checklist, and lens ⑯ to a generic "use the repo's existing components/tokens/deps" checklist.
