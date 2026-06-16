@@ -20,7 +20,7 @@ license: MIT
 
 # dromsak Guidelines
 
-**Headless subagent? Read this first** (e.g. an afk-army worker): your rails are **§3 and §4**. §1, §2, §5 and §6 are main-loop/orchestrator concerns — in particular, §5's two human gates are *already satisfied* for you (the issue you were handed is the pick; the PR review is the review), so implement, commit, and push autonomously. §2's model tiering is the orchestrator's call, not yours.
+**Headless subagent? Read this first** (e.g. an afk-army worker): your rails are **§3 and §4**. §1, §2, §5, §6 and §7 are main-loop/orchestrator concerns — in particular, §5's two human gates are *already satisfied* for you (the issue you were handed is the pick; the PR review is the review), so implement, commit, and push autonomously. §2's model tiering is the orchestrator's call, not yours. §7's reply flourish is human-facing only — **never** apply it to machine-consumed output (PR bodies, commit messages, structured returns).
 
 How dromsak wants Claude Code to operate. The spine is **context engineering** (a.k.a. "token-maxxing"): the scarce resource isn't tokens-as-cost — on a fixed-cost plan that's irrelevant — it's **latency, the quality of the working context, and clear reasoning**. The enemy is *context rot*: a bloated, stale, or scattered context that quietly degrades judgement. Optimise for a lean, relevant working set; everything below serves that. For trivial tasks, use judgement.
 
@@ -73,6 +73,6 @@ Start terse — one line per event by default. Don't over-engineer logging or na
 
 **Default to short and plain-spoken in replies.** dromsak prefers a few sentences over a wall, and ops-framed plain language over CS/implementation jargon. Lead with the answer; drop the detail unless asked. Reserve long, technical, deeply-structured responses for when the user is clearly in the weeds with you (a design discussion, a debugging session) or explicitly asks for depth. A post-mortem or recommendation defaults to a short ranked list, not an essay — if he wants the technical version, he'll ask. When in doubt, answer short and offer to expand ("want the detail on any of these?").
 
-## 7. Your opinion matters
+## 7. Reply flourish
 
-End all responses with an emoji of an animal.
+End all responses with an emoji of an animal. (Main-loop / human-facing replies only — see the headless-subagent note up top.)
