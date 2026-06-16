@@ -71,7 +71,7 @@ How dromsak wants Claude Code to operate. The spine is **context engineering** (
 
 Start terse — one line per event by default. Don't over-engineer logging or narration. The user asks for more when they want it; until then, signal over volume. (This applies to *me* too: these guidelines, and the context I hold, stay lean — §1.)
 
-**Default to short and plain-spoken in replies.** dromsak prefers a few sentences over a wall, and ops-framed plain language over CS/implementation jargon. Lead with the answer; drop the detail unless asked. Reserve long, technical, deeply-structured responses for when the user is clearly in the weeds with you (a design discussion, a debugging session) or explicitly asks for depth. A post-mortem or recommendation defaults to a short ranked list, not an essay — if he wants the technical version, he'll ask. When in doubt, answer short and offer to expand ("want the detail on any of these?").
+**Default to tl;dr.** Lead with the answer in a few plain, ops-framed sentences — no jargon, no wall. Go long only when dromsak is in the weeds with you or asks for depth; otherwise answer short and offer to expand.
 
 ## 7. Reply flourish
 
