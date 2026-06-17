@@ -28,22 +28,24 @@ Laptop will sleep / SSH may drop / you want it overnight unattended → don't. T
 
 ## 1. Resolve repo + gate (this conversation)
 
-- **Box-wide drain lock — acquire FIRST, before the queue.** Two `/afk-army` drains on the same machine — *even in different repos* — share one host's CPU/RAM, and worker builds don't serialize, so two drains oversubscribe and can flatline/OOM the box (CT100, 2026-06-12). A drain is therefore **globally exclusive per user, not per repo.** Claim a fixed-path lock before picking anything:
+- **Per-repo drain lock — claim it before the queue.** Two `/afk-army` drains in the *same* repo oversubscribe the host (their worker builds don't serialize) — the real hazard is two drains in a large codebase like posturermm. Drains in *different* repos coexist: a light curator drain alongside a posturermm drain is fine, and the host's `dev-build.slice` cgroup is the box-wide OOM backstop regardless. So serialize **per repo, not globally**. Resolve `REPO` (next bullet) first, then claim a per-repo lock:
   ```bash
-  LOCK=~/.cache/afk-army-drain.lock.d
+  # REPO must already be resolved (see the Repo bullet below).
+  slug=$(printf '%s' "$REPO" | tr -c 'a-zA-Z0-9' '-')
+  LOCK=~/.cache/afk-army-drain."$slug".lock.d
   if mkdir "$LOCK" 2>/dev/null; then
-    printf 'repo=%s started=%s\n' "${REPO:-?}" "$(date -u +%FT%TZ)" > "$LOCK/owner"
+    printf 'repo=%s started=%s\n' "$REPO" "$(date -u +%FT%TZ)" > "$LOCK/owner"
   else
     started=$(sed -n 's/.*started=//p' "$LOCK/owner" 2>/dev/null)
     age=$(( $(date -u +%s) - $(date -u -d "${started:-now}" +%s 2>/dev/null || echo "$(date -u +%s)") ))
     if [ "$age" -gt 21600 ]; then            # >6h ⇒ a dead drain; reclaim
-      rm -rf "$LOCK"; mkdir "$LOCK"; printf 'repo=%s started=%s\n' "${REPO:-?}" "$(date -u +%FT%TZ)" > "$LOCK/owner"
+      rm -rf "$LOCK"; mkdir "$LOCK"; printf 'repo=%s started=%s\n' "$REPO" "$(date -u +%FT%TZ)" > "$LOCK/owner"
     else
-      echo "Another /afk-army drain is active ($(cat "$LOCK/owner" 2>/dev/null)). Run ONE drain at a time on this box — they share its CPU/RAM. If that drain died, \`rm -rf $LOCK\` and retry."; exit 0
+      echo "Another /afk-army drain is active on $REPO ($(cat "$LOCK/owner" 2>/dev/null)). Run ONE drain PER REPO at a time. A drain in a different repo can run alongside this. If that drain died, \`rm -rf $LOCK\` and retry."; exit 0
     fi
   fi
   ```
-  **Release at loop end and on any early exit:** `rm -rf ~/.cache/afk-army-drain.lock.d`. The host's `dev-build.slice` cgroup is the *resource* backstop (caps aggregate build CPU/RAM so even a bypassed lock can't kill the box); this lock is the *don't-even-try-two* guard that keeps each drain fast (full budget) and the box sane.
+  **Release at loop end and on any early exit:** `rm -rf "$LOCK"` (the per-repo path you claimed — never another repo's). The host's `dev-build.slice` cgroup is the *resource* backstop (caps aggregate build CPU/RAM so even two coexisting drains can't kill the box); this lock is the *don't-even-try-two-in-one-repo* guard that keeps each repo's drain fast (full budget) and serialized.
 - **Repo**: `--repo owner/name` if given, else derive from the cwd — `REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)`. No `gh repo set-default` needed (`gh` resolves the cwd remote on its own). Bail only if `REPO` is empty — not in a git repo, or an unresolvable remote — don't guess.
 - **Full gate** (run once, at merge): `--gate`, else discover — the project's documented gate in `CLAUDE.md`, a `just verify`/`verify-gate` recipe, `package.json` test/lint scripts, `cargo test`/`nextest`, `go test ./...`, etc. Print it in one line and confirm before spawning.
 - **Cheap worker gate** (optional): a *fast* compile/lint only if it's genuinely cheap on this project and won't thrash under N-way parallelism. Default **none** — the orchestrator's single full gate is the safety. (On a project with one giant compilation unit, a "cheap" check isn't cheap; leave it off.)
@@ -112,6 +114,20 @@ for br in <each SUCCESSFUL PR branch this wave>; do git merge --no-edit "origin/
 - **Green** → squash-merge every PR. GitHub's merge-ref lags a force-push/advance, so on `gh pr merge` failing with "Base branch was modified" or `mergeable=UNKNOWN`, poll `gh pr view --json mergeable,mergeStateStatus` until `MERGEABLE/CLEAN` and retry the merge call. `--delete-branch`. `Closes #N` auto-closes the issue — **which is what unblocks the next wave's dependents**, so a clean merge here is the loop's forward motion.
 - **Red** → **bisect**: split the PR set in half, gate each half on a fresh integration branch, recurse on the red half(s) to isolate the culprit(s). Merge the innocent PRs; **park** only the culprit (flip → `needs-human-review`, add to `PARKED`, post the gate-log head, leave its PR open). The bisect-merged innocents still count as forward progress.
 - Conflicts during integration are usually trivial sibling drift (a renamed field, a changed wrapper type) — resolve inline and continue; a genuinely tangled one gets parked like any other culprit.
+- **Sweep merged refs + worktrees — clean up after yourself.** Once this wave's PRs are merged, remove the cruft so branches and worktrees don't pile up across waves and runs. Touch only what **merged** — leave parked issues' branches, PRs, and worktrees alone:
+  ```bash
+  cd <main repo>
+  git switch -q main && git fetch -q --prune origin      # drop remote-tracking refs for branches deleted at merge
+  git branch -D afk-integration 2>/dev/null              # the throwaway integration branch
+  # remote army/* branches whose PR merged (covers a non-gh landing that skipped --delete-branch):
+  for br in <each MERGED PR branch this wave>; do git push -q origin --delete "$br" 2>/dev/null; done
+  # local army/* branches already merged into main:
+  git branch --merged main | sed 's/^[* ]*//' | grep '^army/' | xargs -r git branch -d
+  # runtime worktrees: it auto-removes UNCHANGED ones, but a worker that committed leaves its
+  # worktree behind — prune stale admin entries, then drop any leftover army/* worktree dir:
+  git worktree prune
+  git worktree list --porcelain | awk '/^worktree /{w=$2} /^branch / && /army\//{print w}' | xargs -r -I{} git worktree remove --force {}
+  ```
 
 Per-wave, report one line per outcome: `✅ merged #N`, `🚨 parked #N (gate red / conflict)`, `🤔 needs-info #N`. Then continue to step 6.
 
@@ -132,7 +148,7 @@ Between waves the conversation stays alive and idle (you're notified when each b
 
 One consolidated summary across all waves: total `✅ merged` (with #s), the `PARKED` set with per-issue reasons and labels applied, and — if stalled — the blocked-but-not-drainable remainder with the parked issue damming each. End state is **drained** or **stalled**, stated plainly.
 
-**Then release the box-wide drain lock** (section 1): `rm -rf ~/.cache/afk-army-drain.lock.d`. Do this on every exit path — drained, stalled, or aborted — so the next drain isn't blocked by a lock the finished run left behind.
+**Then release the per-repo drain lock** (section 1): `rm -rf "$LOCK"` (the per-repo path you claimed — never another repo's). Do this on every exit path — drained, stalled, or aborted — so the next drain on this repo isn't blocked by a lock the finished run left behind.
 
 ## What this skill does NOT do
 
