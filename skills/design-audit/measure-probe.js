@@ -80,13 +80,18 @@
       const headCells = [...table.querySelectorAll('thead th')];
       const bodyRows = clamp([...table.querySelectorAll('tbody tr')].filter(vis), 40);
       const firstRow = bodyRows[0];
-      const cells = firstRow ? [...firstRow.children] : [];
+      // Skip the absolute-positioned stretched-link overlay cell (out of flow; not a real column).
+      const cells = firstRow ? [...firstRow.children].filter((td) => getComputedStyle(td).position !== 'absolute') : [];
       const columns = cells.map((td, i) => {
         const s = getComputedStyle(td); const r = td.getBoundingClientRect();
-        const inner = td.firstElementChild || td;
-        const contentW = Math.max(inner.scrollWidth || 0, ...[...td.querySelectorAll('*')].slice(0, 6).map((e) => e.scrollWidth || 0), 0);
         const th = headCells[i];
         const cellW = Math.round(r.width);
+        // RENDERED extent — the actual glyph/visual width, NOT the wrapper div. The wrapper is a
+        // `min-w-0` flex child that fills the cell, so measuring its scrollWidth hid the flagship
+        // dead-space void: a 1374px cell holding 295px of text read as voidRatio 0.98. We measure
+        // text via a Range over non-hidden text nodes, and bars/icons/swatches via painted leaf
+        // width (visualExtent). THIS is what voidRatio must compare against.
+        const contentW = Math.min(visualExtent(td), cellW);
         return {
           id: td.getAttribute('data-col') || (th && th.getAttribute('data-col')) || String(i),
           label: th ? txt(th) : '',
@@ -195,6 +200,12 @@
   // ── helpers ──
   function tag(el) { return el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (el.getAttribute && el.getAttribute('data-col') ? "[data-col=" + el.getAttribute('data-col') + "]" : '') + (el.className && el.className.toString ? '.' + el.className.toString().split(' ').filter(Boolean).slice(0, 2).join('.') : ''); }
   function dedupe(arr, keyfn) { const s = new Set(); const r = []; for (const x of arr) { const k = keyfn(x); if (!s.has(k)) { s.add(k); r.push(x); } } return r; }
+  // Width of the actual rendered text — a Range over text nodes, skipping sr-only/clipped ones
+  // (their geometric rect ignores the clip and would inflate the extent).
+  function textExtent(el) { let max = 0; try { const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); const r = document.createRange(); let n; while ((n = w.nextNode())) { if (!n.nodeValue.trim()) continue; const p = n.parentElement; if (p) { const ps = getComputedStyle(p); if (ps.position === 'absolute' && (parseFloat(ps.width) <= 1 || (ps.clip && ps.clip !== 'auto'))) continue; if ((p.className || '').toString().includes('sr-only')) continue; } r.selectNodeContents(n); const x = r.getBoundingClientRect().width; if (x > max) max = x; } } catch (e) {} return Math.round(max); }
+  // Rendered content extent = max(text extent, painted leaf width). The second term keeps bars,
+  // swatches, sparklines and icons (which carry meaning but no text) from reading as empty voids.
+  function visualExtent(el) { let max = textExtent(el); try { for (const e of el.querySelectorAll('*')) { if (e.children.length) continue; const t = e.tagName.toLowerCase(); const s = getComputedStyle(e); const paints = t === 'svg' || t === 'img' || (s.backgroundColor && s.backgroundColor !== 'rgba(0, 0, 0, 0)') || s.backgroundImage !== 'none' || parseFloat(s.borderTopWidth) > 0; if (paints) { const w = e.getBoundingClientRect().width; if (w > max) max = w; } } } catch (e) {} return Math.round(max); }
   function parseColor(c) { const m = (c || '').match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(',').map((x) => parseFloat(x)); const a = p[3] === undefined ? 1 : p[3]; return { r: p[0], g: p[1], b: p[2], a }; }
   function effectiveBg(el) { let n = el; while (n && n !== document.documentElement) { const c = parseColor(getComputedStyle(n).backgroundColor); if (c && c.a > 0.5) return c; n = n.parentElement; } return { r: 13, g: 14, b: 17, a: 1 }; }
   function lin(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
