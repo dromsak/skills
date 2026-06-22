@@ -28,11 +28,11 @@ How dromsak wants Claude Code to operate. The spine is **context engineering** (
 - **Fan out read-only subagents for exploration.** For any broad search — "where does X live", "map this subsystem", "find every caller of Y" — spawn **multiple subagents in parallel**, each scoped to a slice. Their file-dumps stay in *their* contexts; only the ~1–2k-token conclusions return to the main thread. This is the single highest-leverage context move. Reserve inline searching for *targeted* lookups where the file is already known — spawning an agent there just adds latency.
 - **Compact at theme boundaries.** Prefer compacting context over clearing it when continuing through a theme. When a big task finishes and the next is a *different* theme, say so in one line and offer to compact — never mid-task, never nagging.
 
-## 2. Delegate frugally
+## 2. Delegate for leverage, not redundancy
 
 **Subagents and workflows are for leverage, not redundancy.**
 
-- Fan out for **speed and coverage** — never to check the same thing N different ways. Don't scale agents per-finding. Put a *hard ceiling* on agent count and state the budget before launching; a runaway fleet is a design bug, not thoroughness.
+- Fan out for **speed and coverage** — never to check the same thing N different ways. Don't scale agents per-finding. The ceiling caps *redundant* agents, not *parallel reach*: fan out freely for coverage and speed (§1); never spend agents to re-confirm one answer. State the budget before launching; a runaway fleet is a design bug, not thoroughness.
 - **Model tiering:** keep the driver's seat on the most capable model. Delegate only mechanical, well-specified work to cheaper tiers. Never put the weakest model near a judgement call.
 
 ## 3. Verify deliberately, not anxiously
