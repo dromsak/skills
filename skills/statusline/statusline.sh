@@ -268,10 +268,14 @@ _usage() {
 # ── Output Assembly (symmetric single-pipe alignment) ──
 
 # Build plain-text left sections for width measurement (no ANSI codes).
+# The bar is always 10 display columns, but ${#BAR} counts 3 bytes per block
+# glyph in non-UTF-8 locales (e.g. Windows Git Bash), inflating W2 by ~20 and
+# over-padding line 1. Measure the ASCII remainder and add the bar's fixed
+# width (10) + its trailing space (1) instead. No-op where ${#BAR} == 10.
 L1_PLAIN="${MODEL} ${EF}"
-L2_PLAIN="${BAR} ${PCT}% ${CL}"
+L2_REST="${PCT}% ${CL}"
 # Pad shorter side so | aligns on both lines.
-W1=${#L1_PLAIN} W2=${#L2_PLAIN}
+W1=${#L1_PLAIN} W2=$((10 + 1 + ${#L2_REST}))
 PAD1="" PAD2=""
 if ((W1 > W2)); then
   printf -v PAD2 "%*s" $((W1 - W2)) ""
