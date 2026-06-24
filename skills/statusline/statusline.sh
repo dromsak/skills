@@ -112,18 +112,21 @@ _stale() { [ ! -f "$1" ] || [ $((NOW - $(stat -f%m "$1" 2>/dev/null || stat -c%Y
 
 # ── Parse stdin + settings in one jq call ──
 # Fields: MODEL DIR PCT CTX COST EFF HAS_RL U5 U7 R5 R7 TIN
-# Read settings into a shell var rather than process substitution so the jq
-# --argjson path works on Windows Git Bash (where /proc/<pid>/fd/N used by
-# <(...) is unavailable and --slurpfile silently fails, yielding empty fields).
+# Read settings with the $(<...) builtin (no cat fork) and parse it inside the
+# main jq via fromjson? so a malformed file degrades to {} without a separate
+# jq -e validation fork. Settings is consulted only for the effortLevel
+# fallback. Passing it as a shell var (not <(...) process substitution) keeps
+# the jq path working on Windows Git Bash, where /proc/<pid>/fd/N is absent.
 HAS_RL=0
-_SETTINGS=$(cat "$HOME/.claude/settings.json" 2>/dev/null)
-echo "$_SETTINGS" | jq -e . >/dev/null 2>&1 || _SETTINGS='{}'
+_SETTINGS=""
+[ -r "$HOME/.claude/settings.json" ] && _SETTINGS=$(<"$HOME/.claude/settings.json")
 IFS=$'\t' read -r MODEL DIR PCT CTX COST EFF HAS_RL U5 U7 R5 R7 TIN < <(
-  jq -r --argjson cfg "$_SETTINGS" \
-    '[(.model.display_name//"?"),(.workspace.project_dir//"."),
+  jq -r --arg cfg "$_SETTINGS" \
+    '(($cfg|fromjson?)//{}) as $c
+    |[(.model.display_name//"?"),(.workspace.project_dir//"."),
     (.context_window.used_percentage//0|floor),(.context_window.context_window_size//0),
     (.cost.total_cost_usd//0),
-    (.effort.level//$cfg.effortLevel//"default"),
+    (.effort.level//$c.effortLevel//"default"),
     (if .rate_limits then 1 else 0 end),
     (.rate_limits.five_hour.used_percentage//null|if type=="number" then floor else "--" end),
     (.rate_limits.seven_day.used_percentage//null|if type=="number" then floor else "--" end),
@@ -177,7 +180,11 @@ for ((i = F; i < 10; i++)); do BAR+='░'; done
 # Atomic write: write to a temp file first, then mv to avoid partial reads.
 BR="" FC=0 AD=0 DL=0
 if [[ "$CACHE_OK" == "1" ]]; then
-  GC="${_CD}/claude-sl-git-$(printf '%s' "$DIR" | { shasum 2>/dev/null || sha1sum; } | cut -c1-16)"
+  # Fork-free key: sanitize DIR to a filesystem-safe tail instead of shelling
+  # out to shasum every render. Collision only matters as a brief (<=5s) wrong
+  # stat between two repos sharing a 64-char path suffix — self-healing.
+  _KEY=${DIR//[^A-Za-z0-9]/_}
+  GC="${_CD}/claude-sl-git-${_KEY: -64}"
   if _stale "$GC" 5; then
     if _collect_git_info; then
       _write_cache_record "$GC" "$BR" "$FC" "$AD" "$DL"
