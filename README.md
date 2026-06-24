@@ -16,6 +16,7 @@ conversation while five workers grind").
 | [`uat`](skills/uat/SKILL.md) | Drive Playwright-based UAT journeys against a running web app, filing GitHub issues inline. Self-bootstraps `docs/uat.md` on first run by interviewing you and reading your routes. |
 | [`architect`](skills/architect/SKILL.md) | Senior-architect audit of one code surface — finds wheel-reinvention, over-engineering, duplication, dead code, layering drift, and bloat across 15 named lenses, adversarially verifies each finding, ranks by impact÷effort, and (only on your pick) routes fixes into the AFK pipeline. Language-agnostic engine: auto-detects the stack and reads an optional per-repo `.claude/architect.md` profile for named surfaces and project rules. Read-first, two human gates, no autonomous mode. Pairs `SKILL.md` with `audit-workflow.js` (the frugal ~2-agents/chunk fan-out). |
 | [`grill-me`](skills/grill-me/SKILL.md) | Interview the user relentlessly about a plan or design until reaching shared understanding. Vendored from [`mattpocock/skills`](https://github.com/mattpocock/skills). |
+| [`statusline`](skills/statusline/SKILL.md) | Install/re-point a forked claude-pace statusline (model · context · effort \| project · branch · git stats, plus a pace-aware 5h/7d quota bar). Pure Bash + jq, no Node. Points `statusLine` at the live `statusline.sh` in this repo so edits render immediately. Forked from [`Astro-Han/claude-pace`](https://github.com/Astro-Han/claude-pace). |
 | [`dromsak-guidelines`](skills/dromsak-guidelines/SKILL.md) | dromsak's personal operating profile, centred on **context engineering / token-maxxing** — small relevant working set, just-in-time loading, parallel read-only subagents for fan-out, compact at theme boundaries, frugal delegation, verify-once-at-the-boundary. Its §4 consolidates the karpathy LLM-coding rails (MIT — see Attribution), and it adds an advisory-lane autonomy stance. Loaded by `afk-army` workers; load at session start. |
 
 ## The AFK pipeline
@@ -130,6 +131,10 @@ original repos.
 - `grill-me` is vendored from
   [`mattpocock/skills`](https://github.com/mattpocock/skills) (Matt
   Pocock, MIT).
+- `statusline` is forked from
+  [`Astro-Han/claude-pace`](https://github.com/Astro-Han/claude-pace) (yuhan,
+  MIT). The script carries local modifications that diverge from upstream;
+  attribution is in-file at the top of `skills/statusline/statusline.sh`.
 - `dromsak-guidelines` is original work; its §4 coding rails consolidate and
   adapt the karpathy rails from
   [`forrestchang/karpathy-skills`](https://github.com/forrestchang/karpathy-skills)
